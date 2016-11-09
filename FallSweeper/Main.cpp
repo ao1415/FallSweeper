@@ -16,6 +16,31 @@ const Point drawPos{ WindowWidth / 2 - BlockSize*StageWidth / 2, WindowHeight };
 
 const Point direction[] = { Point(-1,-1),Point(0,-1),Point(1,-1),Point(-1,0),Point(1,0),Point(-1,1),Point(0,1),Point(1,1) };
 
+class Blast : public IEffect {
+public:
+
+	Blast(const Point& pos) {
+		point = pos;
+	}
+
+	bool update(double t) override {
+
+		if (t < 0.25)
+			Circle(point, t*BlockSize * 2).draw(Palette::Crimson);
+		else if (t < 0.5)
+			Circle(point, BlockSize / 2).draw(Color(Palette::Crimson, int(255 - t * 1020)));
+		else
+			return false;
+
+		return true;
+	}
+
+private:
+
+	Point point;
+
+};
+
 class Control {
 public:
 
@@ -47,13 +72,59 @@ public:
 
 	const bool update() {
 
-		timer++;
-		if (timer % 180 == 0)
+		if (gameFlag)
 		{
-			const auto column = getColumn();
-			stage.push_back(column);
-			openStage.push_back(Array<int>(StageWidth));
+			if (animeFlag)
+			{
+				if (animeTimer < 30){}
+				else
+				{
+					animeFlag = false;
+					animeTimer = 0;
+				}
+				animeTimer++;
+			}
+			else
+			{
+				blockTimer++;
+				if (blockTimer % 180 == 0)
+				{
+					const auto column = getColumn();
+					stage.push_back(column);
+					openStage.push_back(Array<int>(StageWidth));
+				}
+
+				mouseInput();
+			}
 		}
+
+		drawStage();
+		effect.update();
+
+		return gameFlag;
+	}
+
+	void draw() const {
+
+		//drawStage();
+
+	}
+
+private:
+
+	Array<Array<int>> stage;
+	Array<Array<int>> openStage;
+
+	Font numberFont;
+	Effect effect;
+
+	int blockTimer = 0;
+	bool gameFlag = true;
+
+	int animeTimer = 0;
+	bool animeFlag = false;
+
+	void mouseInput() {
 
 		const auto point2point = [&](const Point& pos) {
 			const Point point = Point(pos.x - drawPos.x, drawPos.y - pos.y);
@@ -71,7 +142,39 @@ public:
 
 			if (in(pos))
 			{
-				stageOpen(pos);
+				if (openStage[pos.y][pos.x] == NoneNumber)
+				{
+					if (stage[pos.y][pos.x] == BombNumber)
+					{
+						int x = pos.x*BlockSize + drawPos.x + BlockSize / 2;
+						int y = drawPos.y - pos.y*BlockSize - BlockSize / 2;
+						effect.add<Blast>(Point(x, y));
+						gameFlag = false;
+						return;
+					}
+					else
+					{
+						stageOpen(pos);
+					}
+				}
+				else if (openStage[pos.y][pos.x] == FlagNumber)
+				{
+					if (stage[pos.y][pos.x] == BombNumber)
+					{
+						int x = pos.x*BlockSize + drawPos.x + BlockSize / 2;
+						int y = drawPos.y - pos.y*BlockSize - BlockSize / 2;
+						effect.add<Blast>(Point(x, y));
+						stage[pos.y][pos.x] = 0;
+						openStage[pos.y][pos.x] = NoneNumber;
+						stageOpen(pos);
+					}
+					else
+					{
+						gameFlag = false;
+						return;
+					}
+				}
+
 			}
 		}
 		else if (Input::MouseR.clicked)
@@ -88,24 +191,7 @@ public:
 			}
 		}
 
-
-		return true;
 	}
-
-	void draw() const {
-
-		drawStage();
-
-	}
-
-private:
-
-	Array<Array<int>> stage;
-	Array<Array<int>> openStage;
-
-	Font numberFont;
-
-	int timer = 0;
 
 	Array<int> getColumn() const {
 
@@ -260,10 +346,14 @@ void Main() {
 	bool setup = false;
 	int anime = 0;
 
+	Font font(40);
+
 	while (System::Update())
 	{
 		if (!setup)
 		{
+			font(L"クリックしたらゲームスタート").drawCenter(Window::Center());
+
 			if (Input::MouseL.clicked)
 			{
 				setup = true;
@@ -293,9 +383,14 @@ void Main() {
 				}
 				else
 				{
-					control = Control();
-					setup = false;
-					anime = 0;
+					font(L"ゲームオーバー\nクリックしてタイトルに戻る").drawCenter(Window::Center());
+
+					if (Input::MouseL.clicked)
+					{
+						control = Control();
+						setup = false;
+						anime = 0;
+					}
 				}
 			}
 		}
