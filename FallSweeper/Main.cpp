@@ -10,6 +10,7 @@ const int BlockSize = 32;
 const int NoneNumber = 0;
 const int OpenNumber = 1;
 const int FlagNumber = 2;
+const int VoidNunber = 3;
 const int BombNumber = 10;
 
 const Point drawPos{ WindowWidth / 2 - BlockSize*StageWidth / 2, WindowHeight };
@@ -41,6 +42,37 @@ private:
 
 };
 
+class BlockDebris : public IEffect {
+public:
+
+	BlockDebris(const Point& pos) {
+		point = pos;
+		vec = Vec2(Random(-5, 5), Random(-10, 0));
+		rota = Radians(Random(0, 360));
+	}
+
+	bool update(double t) override {
+
+		vec.y = Min(vec.y + 0.2, 10.0);
+		point.x += vec.x;
+		point.y += vec.y;
+
+		Rect rect((int)point.x, (int)point.y, 7, 5);
+		rect.rotated(rota).draw(Palette::Deepskyblue);
+
+		if (point.y > WindowHeight) return false;
+
+		return true;
+	}
+
+private:
+
+	Vec2 point;
+	Vec2 vec;
+	double rota;
+
+};
+
 class Control {
 public:
 
@@ -59,14 +91,23 @@ public:
 		}
 
 		stage[0][StageWidth / 2 - 1] = NoneNumber;
-		stage[0][StageWidth / 2] = NoneNumber;
+		stage[0][StageWidth / 2 + 0] = NoneNumber;
 		stage[1][StageWidth / 2 - 1] = NoneNumber;
-		stage[1][StageWidth / 2] = NoneNumber;
+		stage[1][StageWidth / 2 + 0] = NoneNumber;
+
+		stage[0][StageWidth / 2 - 2] = NoneNumber;
+		stage[0][StageWidth / 2 + 1] = NoneNumber;
+		stage[1][StageWidth / 2 - 2] = NoneNumber;
+		stage[1][StageWidth / 2 + 1] = NoneNumber;
+		stage[2][StageWidth / 2 - 1] = NoneNumber;
+		stage[2][StageWidth / 2 + 0] = NoneNumber;
+		stage[2][StageWidth / 2 - 2] = NoneNumber;
+		stage[2][StageWidth / 2 + 1] = NoneNumber;
 
 		openStage[0][StageWidth / 2 - 1] = 1;
-		openStage[0][StageWidth / 2] = 1;
+		openStage[0][StageWidth / 2 + 0] = 1;
 		openStage[1][StageWidth / 2 - 1] = 1;
-		openStage[1][StageWidth / 2] = 1;
+		openStage[1][StageWidth / 2 + 0] = 1;
 
 	}
 
@@ -76,11 +117,12 @@ public:
 		{
 			if (animeFlag)
 			{
-				if (animeTimer < 30){}
+				if (animeTimer < 60) {}
 				else
 				{
 					animeFlag = false;
 					animeTimer = 0;
+					deleteLine(true);
 				}
 				animeTimer++;
 			}
@@ -95,6 +137,10 @@ public:
 				}
 
 				mouseInput();
+				if (deleteLine())
+				{
+					animeFlag = true;
+				}
 			}
 		}
 
@@ -193,6 +239,58 @@ private:
 
 	}
 
+	bool deleteLine(const bool dFlag = false) {
+
+		int deleteCount = 0;
+
+		for (int y = (int)stage.size() - 1; y >= 0; y--)
+		{
+			bool flag = true;
+			for (int x = 0; x < StageWidth; x++)
+			{
+				if (openStage[y][x] != OpenNumber && openStage[y][x] != VoidNunber)
+					flag = false;
+			}
+
+			if (flag)
+			{
+				deleteCount++;
+				for (int x = 0; x < StageWidth; x++)
+				{
+					int px = x*BlockSize + drawPos.x + BlockSize / 2;
+					int py = drawPos.y - y*BlockSize - BlockSize / 2;
+					if (!dFlag)
+					{
+						effect.add<BlockDebris>(Point(px, py));
+						effect.add<BlockDebris>(Point(px, py));
+						effect.add<BlockDebris>(Point(px, py));
+						openStage[y][x] = VoidNunber;
+					}
+				}
+
+				if (dFlag)
+				{
+					for (int dy = y; dy + 1 < (int)stage.size(); dy++)
+					{
+						stage[dy] = stage[dy + 1];
+						openStage[dy] = openStage[dy + 1];
+					}
+				}
+			}
+
+		}
+
+		if (dFlag)
+		{
+			for (int i = 0; i < deleteCount; i++)
+			{
+				stage.pop_back();
+				openStage.pop_back();
+			}
+		}
+		return deleteCount > 0;
+	}
+
 	Array<int> getColumn() const {
 
 		Array<int> column;
@@ -274,9 +372,10 @@ private:
 					rect.left.draw(1, Palette::Lightblue);
 					rect.bottom.draw(1, Palette::Mediumblue);
 					rect.right.draw(3, Palette::Mediumblue);
+
 					numberFont(L"F").drawCenter(rect.center, Palette::Black);
 				}
-				else
+				else if (openStage[y][x] == NoneNumber)
 				{
 					rect.draw(Palette::Deepskyblue);
 					rect.top.draw(3, Palette::Lightblue);
